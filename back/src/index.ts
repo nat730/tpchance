@@ -17,6 +17,7 @@ interface User {
   mise?: number;
 }
 let userTab: User[] = [];
+let roundNumber = 1;
 
 io.on('connection', (socket) => {
   console.log('a user connected', socket.id)
@@ -27,19 +28,21 @@ io.on('connection', (socket) => {
       pseudo: pseudoValue,
       jetons: 100
     };
+
     if (userTab.length < 3) {
       userTab.push(user);
       socket.emit("createUserSuccess");
-      console.log(userTab);
+      console.log("création user: ", userTab);
     } else {
       socket.emit("errorGameFull");
     }
+
     if (userTab.length === 3) {
       io.emit("gameStart");
 
       setTimeout(() => {
         const jetons = userTab.find(user => user.id === socket.id)?.jetons;
-        io.emit("startManche", jetons);
+        io.emit("startRound", jetons, roundNumber);
       }, 5000);
     }
   })
@@ -58,7 +61,6 @@ io.on('connection', (socket) => {
     const userIndex = userTab.findIndex(user => user.id === socket.id);
     userTab[userIndex].pileFace = mise.pileFaceValue;
     userTab[userIndex].mise = parseInt(mise.miseValue);
-    console.log(userTab);
 
     const playerHasBet = userTab.filter(user => user.pileFace !== undefined && user.mise !== undefined);
     if (playerHasBet.length === 3) {
@@ -75,7 +77,39 @@ io.on('connection', (socket) => {
             io.emit("lose", user.id, user.jetons, user.mise);
           }
         }
+        user.pileFace = undefined;
+        user.mise = undefined;
       })
+      roundNumber ++;
+    }
+  })
+
+  socket.on("startNewRound", jetons => {
+    if (roundNumber < 4) {
+      setTimeout(() => {
+        io.emit("gameStart");
+      }, 6000);
+
+      setTimeout(() => {
+        socket.emit("startRound", jetons, roundNumber);
+      }, 11000);
+    } else {
+      const sortedUserTab = userTab.sort((a, b) => b.jetons - a.jetons);
+
+      const results =  sortedUserTab.map(user => ({
+        pseudo: user.pseudo,
+        jetons: user.jetons
+      }));
+      console.log(sortedUserTab, results);
+
+      socket.emit("results", results);
+
+      setTimeout(() => {
+        userTab = [];
+        roundNumber = 1;
+
+        socket.emit("resetGame");
+      }, 10000);
     }
   })
 

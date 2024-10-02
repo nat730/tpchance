@@ -13,6 +13,9 @@ const body = document.querySelector("body");
 //Form pseudo
 const formPseudo = document.createElement("form");
 
+const formPseudoTitle = document.createElement("h1");
+formPseudoTitle.innerHTML = "Rejoignez la partie";
+
 const inputPseudo = document.createElement("input");
 inputPseudo.type = "text";
 inputPseudo.placeholder = "Pseudo";
@@ -21,6 +24,7 @@ const submitButtonPseudo = document.createElement("button");
 submitButtonPseudo.type = "submit";
 submitButtonPseudo.textContent = "Valider";
 
+formPseudo.appendChild(formPseudoTitle);
 formPseudo.appendChild(inputPseudo);
 formPseudo.appendChild(submitButtonPseudo);
 body.append(formPseudo);
@@ -42,9 +46,12 @@ const chatContainer = document.createElement("div");
 //Chrono
 const chronoValue = document.createElement("p");
 
-//Manche
+//Round
 let pileFaceValue = "pile";
 const miseContainer = document.createElement("form");
+
+const roundTitle = document.createElement("h1");
+roundTitle.innerHTML = "Manche";
 
 const pileButton = document.createElement("input");
 pileButton.type = "radio";
@@ -81,10 +88,19 @@ miseContainer.appendChild(faceLabel);
 miseContainer.appendChild(miseInput);
 miseContainer.appendChild(submitButtonMise);
 
+//Waiting room
 const waiting = document.createElement("p");
 waiting.innerHTML = "En attente des autres joueurs...";
 
-const mancheEndMessage = document.createElement("p");
+//Round result
+const roundEndMessage = document.createElement("p");
+
+//Results tab
+const resultsContainer = document.createElement("div");
+
+const resultsTitle = document.createElement("h1");
+resultsTitle.innerHTML = "Classement de la partie";
+
 
 submitButtonPseudo.addEventListener('click', function (e) {
     e.preventDefault();
@@ -129,12 +145,17 @@ socket.on("chatMessage", messageObj => {
 
 socket.on("gameStart", () => {
     chatContainer.remove();
-    formChat.remove(); 
-    mancheEndMessage.remove();
+    formChat.remove();
+    roundTitle.remove();
+    roundEndMessage.remove();
 
     body.append(chronoValue);
 
-    const start = Date.now();
+    let start = Date.now();
+
+    if (timerId) {
+        clearInterval(timerId);
+    }
 
     timerId = setInterval(() => {
         const millis = Date.now() - start;
@@ -142,11 +163,15 @@ socket.on("gameStart", () => {
     }, 137);
 });
 
-socket.on("startManche", jetons => {
+socket.on("startRound", (jetons, roundNumber) => {
     clearInterval(timerId);
+
     chronoValue.remove();
 
     miseInput.max = jetons;
+
+    roundTitle.innerHTML = "Manche " + roundNumber;
+    body.append(roundTitle);
     body.append(miseContainer);
 });
 
@@ -177,16 +202,41 @@ socket.on("win", (id, jetons, mise) => {
     if (id === userId) {
         waiting.remove();
 
-        mancheEndMessage.innerHTML = `Vous avez gagné ${mise + 10} jetons ! Vous avez désormais ${jetons} jetons.`;
-        body.append(mancheEndMessage);
+        roundEndMessage.innerHTML = `Vous avez gagné ${mise + 10} jetons ! Vous avez désormais ${jetons} jetons.`;
+        body.append(roundEndMessage);
+
+        socket.emit("startNewRound", jetons);
     }
-})
+});
 
 socket.on("lose", (id, jetons, mise) => {
     if (id === userId) {
         waiting.remove();
-        
-        mancheEndMessage.innerHTML = `Vous avez perdu ${mise} jetons. Vous avez désormais ${jetons} jetons.`;
-        body.append(mancheEndMessage);
+
+        roundEndMessage.innerHTML = `Vous avez perdu ${mise} points. Vous avez désormais ${jetons} points.`;
+        body.append(roundEndMessage);
+
+        socket.emit("startNewRound", jetons);
     }
-})
+});
+
+socket.on("results", results => {
+    roundEndMessage.remove();
+
+    resultsContainer.innerHTML = "";
+    resultsContainer.appendChild(resultsTitle);
+    body.append(resultsContainer);
+
+    results.forEach(result => {
+        const resultRow = document.createElement("p");
+        resultRow.innerHTML = result.pseudo + " : " + result.jetons + " points";
+
+        resultsContainer.append(resultRow);
+    });
+});
+
+socket.on("resetGame", () => {
+    resultsContainer.remove();
+
+    body.append(formPseudo);
+});
